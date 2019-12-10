@@ -64,6 +64,10 @@ ui <- fluidPage( # Application title
         outputId = "download",
         label = "Download",
         width = "100%"
+      ),
+      helpText(
+        "For more information please visit the",
+        HTML("<a href = 'https://github.com/cjburgess/picarro_shiny'>app's github repository</a>")
       )
     ),
     
