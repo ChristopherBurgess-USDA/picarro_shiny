@@ -1,9 +1,8 @@
 filter_data = function(raw_data){
-  raw_data = raw_data %>%
+  raw_data %>%
     mutate(date_time = ymd_hms(paste(DATE, TIME))) %>%
     filter(
-      MPVPosition != 16 & MPVPosition %% 1 == 0,
-      solenoid_valves !=0
+      MPVPosition %% 1 == 0, solenoid_valves !=0
     ) %>%
     select(
       date_time,
@@ -14,6 +13,17 @@ filter_data = function(raw_data){
       valve = MPVPosition
     ) %>%
     group_by(valve) %>%
+    return()
+  
+}
+
+
+filter_files = function(raw_data){
+  raw_data %>%
+    filter(
+      MPVPosition != 16 & MPVPosition %% 1 == 0,
+      solenoid_valves !=0
+    ) %>%
     return()
   
 }
@@ -65,11 +75,13 @@ mean_calc = function(data, e_time){
     return()
 }
 
+
 picarro_file_parser = function(data){
   co_data = data %>%
     mutate(raw = map(datapath, ~read_table(.x, col_names = T))) %>%
+    mutate(temp = map(raw, filter_files)) %>%
+    filter(map(temp, ~nrow(.x))>1) %>%
     mutate(filtered = map(raw, filter_data)) %>%
-    filter(map(filtered, ~nrow(.x))>1) %>%
     select(name, filtered) %>%
     unnest(filtered) %>%
     arrange(date_time) %>%
@@ -84,7 +96,7 @@ picarro_file_parser = function(data){
     rowid_to_column(var = "sample") %>%
     select(valve, sample, start_time, end_time)
 
-  co_data %>%
+  final_data = co_data %>%
     left_join(int_data) %>%
     mutate(
       v_range = interval(start_time, end_time),
@@ -95,6 +107,7 @@ picarro_file_parser = function(data){
         T ~ "Good"
       )
     ) %>%
+    filter(!(valve == 16 & quality %in% c("short", "Good"))) %>%
     arrange(sample) %>%
     mutate(
     means = map2(data, end_time, mean_calc),
@@ -104,7 +117,6 @@ picarro_file_parser = function(data){
     unnest(means) %>%
     select(
       file_name,
-      sample,
       valve,
       start_time,
       end_time,
@@ -117,9 +129,21 @@ picarro_file_parser = function(data){
       data) %>%
     mutate(co2_total = co2_12 + co2_13) %>%
     ungroup(valve) %>%
-    mutate_if(is.character, as.factor) %>%
+    mutate_if(is.character, as.factor)
+  
+  temp = final_data %>%
+    filter(valve == 16) %>%
+    mutate(sample = "background")
+  
+  final_data %>%
+    filter(valve != 16) %>%
+    rowid_to_column(var = "sample") %>%
+    mutate(sample = as.character(sample)) %>%
+    bind_rows(temp) %>%
     return()
 }
+
+
 
 # 
 # 
